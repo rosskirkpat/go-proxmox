@@ -666,3 +666,7 @@ type NodeNetwork struct {
 	Method6  string `json:"method6,omitempty"`
 	Priority int    `json:"priority,omitempty"`
 }
+
+type Scheduler struct {
+	Name string
+}
