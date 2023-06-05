@@ -17,10 +17,11 @@ import (
 )
 
 type TestingData struct {
-	client    *proxmox.Client
-	node      *proxmox.Node
-	storage   *proxmox.Storage
-	appliance *proxmox.Appliance
+	client          *proxmox.Client
+	node            *proxmox.Node
+	storage         *proxmox.Storage
+	snippetsStorage *proxmox.Storage
+	appliance       *proxmox.Appliance
 
 	username        string
 	password        string
@@ -29,6 +30,7 @@ type TestingData struct {
 	otp             string
 	nodeName        string
 	nodeStorage     string
+	snippetStorage  string
 	isoURL          string
 	appliancePrefix string
 }
@@ -58,6 +60,7 @@ func init() {
 	td.secret = os.Getenv("PROXMOX_SECRET")
 	td.nodeName = os.Getenv("PROXMOX_NODE_NAME")
 	td.nodeStorage = os.Getenv("PROXMOX_NODE_STORAGE")
+	td.snippetStorage = os.Getenv("PROXMOX_SNIPPET_STORAGE")
 	td.isoURL = os.Getenv("PROXMOX_ISO_URL") // https://dl-cdn.alpinelinux.org/alpine/v3.14/releases/x86_64/alpine-virt-3.14.1-x86_64.iso
 	td.appliancePrefix = "alpine-virt-3.14.1"
 
@@ -73,6 +76,10 @@ func init() {
 	}
 
 	td.storage, err = td.node.Storage(td.nodeStorage)
+	if err != nil {
+		panic(err)
+	}
+	td.snippetsStorage, err = td.node.Storage(td.snippetStorage)
 	if err != nil {
 		panic(err)
 	}

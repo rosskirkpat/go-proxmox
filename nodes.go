@@ -176,6 +176,10 @@ func (n *Node) StorageISO() (*Storage, error) {
 	return n.findStorageByContent("iso")
 }
 
+func (n *Node) StorageSnippets() (*Storage, error) {
+	return n.findStorageByContent("snippets")
+}
+
 func (n *Node) StorageVZTmpl() (*Storage, error) {
 	return n.findStorageByContent("vztmpl")
 }
@@ -192,7 +196,7 @@ func (n *Node) StorageImages() (*Storage, error) {
 	return n.findStorageByContent("images")
 }
 
-// findStorageByContent takes iso/backup/vztmpl/rootdir/images and returns the storage that type of content should be on
+// findStorageByContent takes iso/backup/vztmpl/rootdir/images/snippets and returns the storage that type of content should be on
 func (n *Node) findStorageByContent(content string) (storage *Storage, err error) {
 	storages, err := n.Storages()
 	if err != nil {

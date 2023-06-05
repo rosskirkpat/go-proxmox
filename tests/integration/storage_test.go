@@ -18,6 +18,11 @@ func TestStorage_ISO(t *testing.T) {
 	assert.Contains(t, err.Error(), "unable to parse directory volume name 'iso/doesnt-exist'")
 }
 
+func TestStorage_Snippet(t *testing.T) {
+	_, err := td.snippetsStorage.Snippet("test.yaml")
+	assert.Contains(t, err.Error(), "unable to parse directory volume name 'snippet/test.yaml'")
+}
+
 func TestStorage_DownloadUrl(t *testing.T) {
 	// download url
 	isoName := nameGenerator(12) + ".iso"
