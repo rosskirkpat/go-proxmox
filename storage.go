@@ -12,9 +12,8 @@ import (
 )
 
 var validContent = map[string]struct{}{
-	"iso":     struct{}{},
-	"vztmpl":  struct{}{},
-	"snippet": struct{}{},
+	"iso":    struct{}{},
+	"vztmpl": struct{}{},
 }
 
 func (s *Storage) Upload(content, file string) (*Task, error) {
@@ -75,12 +74,11 @@ func (s *Storage) ISO(name string) (iso *ISO, err error) {
 	return
 }
 
-func (s *Storage) Snippet(name string) (snippet *Snippet, err error) {
+func (s *Storage) Snippet(name string) (*Snippet, error) {
 	volumeId := fmt.Sprintf("snippets:snippets/%s", name)
-	// nodes/promoxx-nuc1/storage/snippets/content/snippets:snippets/ubuntu-cc.yaml
-
+	snippet := &Snippet{}
 	vol := &StorageVolume{}
-	err = s.client.Get(fmt.Sprintf("/nodes/%s/storage/snippets/content/%s", s.Node, volumeId), &vol)
+	err := s.client.Get(fmt.Sprintf("/nodes/%s/storage/snippets/content/%s", s.Node, volumeId), &vol)
 	if err != nil {
 		return nil, err
 	}
@@ -180,6 +178,14 @@ func (s *Storage) newSnippetsStorageDirectory() error {
 	return s.client.Post("/storage/snippets", newSnippetsStorage, snippetsStorage)
 }
 
+func (s *Storage) newSnippetVolume(volumeId string) (*Task, error) {
+	var upid UPID
+	data := make(map[string]interface{})
+
+	err := s.client.Post(fmt.Sprintf("/nodes/%s/storage/snippets/content/%s", s.Node, volumeId), data, &upid)
+	return NewTask(upid, s.client), err
+}
+
 func (s *Storage) ScpUpload(name, contentType, localPath string) error {
 	node, err := s.client.Node(s.Node)
 	if err != nil {
@@ -218,8 +224,8 @@ func (s *Storage) ScpUpload(name, contentType, localPath string) error {
 	case "snippet":
 		{
 			snippetsStorage := &Storage{}
-			// check if the snippets storage directory already exists and create it if it doesn't
-			if err = s.client.Get("/storage/snippets", snippetsStorage); err != nil || snippetsStorage == nil {
+			// check if the snippets storage directory already exists and create one if it doesn't
+			if err = s.client.Get("/storage/snippets", snippetsStorage); err != nil && snippetsStorage == nil {
 				err = s.newSnippetsStorageDirectory()
 				if err != nil {
 					return err
@@ -229,14 +235,20 @@ func (s *Storage) ScpUpload(name, contentType, localPath string) error {
 			volumeId := fmt.Sprintf("snippets:snippets/%s", name)
 
 			vol := &StorageVolume{}
-			// /nodes/promoxx-nuc1/storage/snippets/content/snippets:snippets/ubuntu-cc.yaml
+			// ensure the snippet volume exists
 			err = s.client.Get(fmt.Sprintf("/nodes/%s/storage/snippets/content/%s", s.Node, volumeId), &vol)
-			if err != nil {
-				return err
+			if err != nil && vol == nil {
+				// snippet volume does not exist, pre-allocate a new snippet volume
+				task, err := s.newSnippetVolume(volumeId)
+				if err != nil {
+					return err
+				}
+				if err = task.WaitFor(5); err != nil {
+					return err
+				}
 			}
 			// local proxmox filesystem path: "/var/lib/vz/snippets/ubuntu-cc.yaml"
 			remotePath = vol.Path
-
 		}
 	case "iso":
 		{
@@ -250,6 +262,6 @@ func (s *Storage) ScpUpload(name, contentType, localPath string) error {
 		}
 	}
 
-	return scpClient.CopyFromFile(context.Background(), *f, remotePath, "0655")
+	return scpClient.CopyFromFile(context.Background(), *f, remotePath, "0644")
 
 }

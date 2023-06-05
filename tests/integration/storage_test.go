@@ -19,7 +19,7 @@ func TestStorage_ISO(t *testing.T) {
 }
 
 func TestStorage_Snippet(t *testing.T) {
-	_, err := td.storage.Snippet("test.yaml")
+	_, err := td.snippetsStorage.Snippet("test.yaml")
 	assert.Contains(t, err.Error(), "unable to parse directory volume name 'snippet/test.yaml'")
 }
 
