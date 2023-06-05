@@ -2,7 +2,6 @@ package proxmox
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	scp "github.com/bramvdbogaerde/go-scp"
 	"github.com/bramvdbogaerde/go-scp/auth"
@@ -154,7 +153,8 @@ func deleteVolume(c *Client, n, s, v, p, t string) (*Task, error) {
 func (s *Storage) newSnippetsStorageDirectory() error {
 	snippetsStorage := &Storage{}
 
-	newSnippetDirectory := map[string]string{
+	// TODO - either make path a configurable param or fetch the path via proxmox api
+	return s.client.Post("/storage/snippets", snippetsStorage, map[string]string{
 		"storage":       "snippet",
 		"path":          "/var/lib/vz",
 		"content":       "snippets",
@@ -163,23 +163,12 @@ func (s *Storage) newSnippetsStorageDirectory() error {
 		"type":          "dir",
 		"disable":       "0",
 		"prune-backups": "keep-all=1",
-	}
-	snippetPost, err := json.Marshal(newSnippetDirectory)
-	if err != nil {
-		return err
-	}
-	newSnippetsStorage := &Storage{}
-
-	err = json.Unmarshal(snippetPost, newSnippetsStorage)
-	if err != nil {
-		return err
-	}
-
-	return s.client.Post("/storage/snippets", newSnippetsStorage, snippetsStorage)
+	})
 }
 
 func (s *Storage) newSnippetVolume(volumeId string) (*Task, error) {
 	var upid UPID
+	// pass empty data as we are pre-allocating the snippet volume to allow for scp
 	data := make(map[string]interface{})
 
 	err := s.client.Post(fmt.Sprintf("/nodes/%s/storage/snippets/content/%s", s.Node, volumeId), data, &upid)
