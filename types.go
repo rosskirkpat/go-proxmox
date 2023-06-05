@@ -15,12 +15,15 @@ var (
 )
 
 type Credentials struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-	Otp      string `json:"otp,omitempty"`
-	Path     string `json:"path,omitempty"`
-	Privs    string `json:"privs,omitempty"`
-	Realm    string `json:"realm,omitempty"`
+	Username          string      `json:"username"`
+	Password          string      `json:"password"`
+	Otp               string      `json:"otp,omitempty"`
+	Path              string      `json:"path,omitempty"`
+	Privs             string      `json:"privs,omitempty"`
+	Realm             string      `json:"realm,omitempty"`
+	SshUsername       string      `json:"sshUsername,omitempty"`
+	SshPrivateKeyPath string      `json:"sshPrivateKeyPath,omitempty"`
+	SshPort           StringOrInt `json:"sshPort,omitempty"`
 }
 
 type Session struct {
@@ -635,6 +638,16 @@ type ISO struct{ Content }
 
 type VzTmpls []*VzTmpl
 type VzTmpl struct{ Content }
+
+type Snippets []*Snippet
+type Snippet struct{ Content }
+
+type StorageVolume struct {
+	Path   string
+	Used   int
+	Format string
+	Size   int
+}
 
 type Backups []*Backup
 type Backup struct{ Content }
