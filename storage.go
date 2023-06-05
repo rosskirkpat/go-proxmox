@@ -1,14 +1,20 @@
 package proxmox
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	scp "github.com/bramvdbogaerde/go-scp"
+	"github.com/bramvdbogaerde/go-scp/auth"
+	"golang.org/x/crypto/ssh"
 	"os"
 	"path/filepath"
 )
 
 var validContent = map[string]struct{}{
-	"iso":    struct{}{},
-	"vztmpl": struct{}{},
+	"iso":     struct{}{},
+	"vztmpl":  struct{}{},
+	"snippet": struct{}{},
 }
 
 func (s *Storage) Upload(content, file string) (*Task, error) {
@@ -69,6 +75,30 @@ func (s *Storage) ISO(name string) (iso *ISO, err error) {
 	return
 }
 
+func (s *Storage) Snippet(name string) (snippet *Snippet, err error) {
+	volumeId := fmt.Sprintf("snippets:snippets/%s", name)
+	// nodes/promoxx-nuc1/storage/snippets/content/snippets:snippets/ubuntu-cc.yaml
+
+	vol := &StorageVolume{}
+	err = s.client.Get(fmt.Sprintf("/nodes/%s/storage/snippets/content/%s", s.Node, volumeId), &vol)
+	if err != nil {
+		return nil, err
+	}
+	snippet.Node = s.Node
+	snippet.Path = vol.Path
+	snippet.Storage = s.Name
+	snippet.Size = StringOrUint64(vol.Size)
+	snippet.Used = StringOrUint64(vol.Used)
+	snippet.client = s.client
+	snippet.VolID = volumeId
+
+	// fully built snippet url:
+	// https://192.168.1.21:8006/api2/json/nodes/promoxx-nuc1/storage/snippets/content/snippets:snippets/ubuntu-cc.yaml
+	snippet.URL = fmt.Sprintf("%s%s", s.client.baseURL, fmt.Sprintf("/nodes/%s/storage/snippets/content/%s", s.Node, volumeId))
+
+	return snippet, nil
+}
+
 func (s *Storage) VzTmpl(name string) (vztmpl *VzTmpl, err error) {
 	err = s.client.Get(fmt.Sprintf("/nodes/%s/storage/%s/content/%s:%s/%s", s.Node, s.Name, s.Name, "vztmpl", name), &vztmpl)
 	if err != nil {
@@ -121,4 +151,105 @@ func deleteVolume(c *Client, n, s, v, p, t string) (*Task, error) {
 
 	err := c.Delete(fmt.Sprintf("/nodes/%s/storage/%s/content/%s", n, s, v), &upid)
 	return NewTask(upid, c), err
+}
+
+func (s *Storage) newSnippetsStorageDirectory() error {
+	snippetsStorage := &Storage{}
+
+	newSnippetDirectory := map[string]string{
+		"storage":       "snippet",
+		"path":          "/var/lib/vz",
+		"content":       "snippets",
+		"nodes":         "",
+		"shared":        "1",
+		"type":          "dir",
+		"disable":       "0",
+		"prune-backups": "keep-all=1",
+	}
+	snippetPost, err := json.Marshal(newSnippetDirectory)
+	if err != nil {
+		return err
+	}
+	newSnippetsStorage := &Storage{}
+
+	err = json.Unmarshal(snippetPost, newSnippetsStorage)
+	if err != nil {
+		return err
+	}
+
+	return s.client.Post("/storage/snippets", newSnippetsStorage, snippetsStorage)
+}
+
+func (s *Storage) ScpUpload(name, contentType, localPath string) error {
+	node, err := s.client.Node(s.Node)
+	if err != nil {
+		return err
+	}
+	var nodeIp string
+	c, _ := s.client.Cluster()
+	for _, ns := range c.Nodes {
+		if ns.Name == node.Name {
+			nodeIp = ns.IP
+			break
+		}
+		continue
+	}
+
+	clientConfig, err := auth.PrivateKey(s.client.credentials.SshUsername, s.client.credentials.SshPrivateKeyPath, ssh.InsecureIgnoreHostKey())
+	if err != nil {
+		return err
+	}
+
+	scpClient := scp.NewClient(fmt.Sprintf("%s:%v", nodeIp, s.client.credentials.SshPort), &clientConfig)
+	err = scpClient.Connect()
+	if err != nil {
+		return err
+	}
+	defer scpClient.Close()
+
+	f, err := os.Open(localPath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	var remotePath string
+	switch contentType {
+	case "snippet":
+		{
+			snippetsStorage := &Storage{}
+			// check if the snippets storage directory already exists and create it if it doesn't
+			if err = s.client.Get("/storage/snippets", snippetsStorage); err != nil || snippetsStorage == nil {
+				err = s.newSnippetsStorageDirectory()
+				if err != nil {
+					return err
+				}
+			}
+
+			volumeId := fmt.Sprintf("snippets:snippets/%s", name)
+
+			vol := &StorageVolume{}
+			// /nodes/promoxx-nuc1/storage/snippets/content/snippets:snippets/ubuntu-cc.yaml
+			err = s.client.Get(fmt.Sprintf("/nodes/%s/storage/snippets/content/%s", s.Node, volumeId), &vol)
+			if err != nil {
+				return err
+			}
+			// local proxmox filesystem path: "/var/lib/vz/snippets/ubuntu-cc.yaml"
+			remotePath = vol.Path
+
+		}
+	case "iso":
+		{
+			// TODO implement me
+			return nil
+		}
+	case "vztmpl":
+		{
+			// TODO implement me
+			return nil
+		}
+	}
+
+	return scpClient.CopyFromFile(context.Background(), *f, remotePath, "0655")
+
 }
